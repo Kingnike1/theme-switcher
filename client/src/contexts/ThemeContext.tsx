@@ -1,10 +1,22 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "light" | "dark";
+/**
+ * Contexto de Tema - Sistema de Personalização de Temas
+ * 
+ * Suporta três temas:
+ * - 'light': Tema claro com fundo branco
+ * - 'dark': Tema escuro com fundo preto
+ * - 'high-contrast': Tema de alto contraste (preto e amarelo)
+ * 
+ * As preferências são salvas em localStorage automaticamente.
+ */
+
+type Theme = "light" | "dark" | "high-contrast";
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme?: () => void;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
   switchable: boolean;
 }
 
@@ -19,46 +31,69 @@ interface ThemeProviderProps {
 export function ThemeProvider({
   children,
   defaultTheme = "light",
-  switchable = false,
+  switchable = true,
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(() => {
+  const [theme, setThemeState] = useState<Theme>(() => {
     if (switchable) {
       const stored = localStorage.getItem("theme");
-      return (stored as Theme) || defaultTheme;
+      if (stored && ["light", "dark", "high-contrast"].includes(stored)) {
+        return stored as Theme;
+      }
     }
     return defaultTheme;
   });
 
+  const [mounted, setMounted] = useState(false);
+
+  // Aplicar tema ao DOM quando o componente monta ou o tema muda
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
+    
+    // Remover todas as classes de tema
+    root.classList.remove("light", "dark", "high-contrast");
+    
+    // Adicionar a nova classe de tema (exceto 'light' que é o padrão)
+    if (theme !== "light") {
+      root.classList.add(theme);
     }
 
+    // Salvar em localStorage se switchable
     if (switchable) {
       localStorage.setItem("theme", theme);
     }
+
+    setMounted(true);
   }, [theme, switchable]);
 
-  const toggleTheme = switchable
-    ? () => {
-        setTheme(prev => (prev === "light" ? "dark" : "light"));
-      }
-    : undefined;
+  // Atualizar tema
+  const setTheme = (newTheme: Theme) => {
+    setThemeState(newTheme);
+  };
+
+  // Alternar entre temas em sequência
+  const toggleTheme = () => {
+    const themes: Theme[] = ["light", "dark", "high-contrast"];
+    const currentIndex = themes.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    setTheme(themes[nextIndex]);
+  };
+
+  // Evitar flash de conteúdo com tema incorreto
+  if (!mounted && switchable) {
+    return <>{children}</>;
+  }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, switchable }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, switchable }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-export function useTheme() {
+export function useTheme(): ThemeContextType {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error("useTheme must be used within ThemeProvider");
+    throw new Error("useTheme deve ser usado dentro de um ThemeProvider");
   }
   return context;
 }
